@@ -2,65 +2,65 @@ import express from 'express';
 import bodyParser from 'body-parser';
 import cookieParser from 'cookie-parser';
 import cors from 'cors';
-// middlewares
-import authenticateToken from './middlewares/authenticateToken.js';
 import helmet from 'helmet';
-// config
+import authenticateToken from './middlewares/authenticateToken.js';
 import connectDB, { seedData, sequelizeSync } from './config/database.js';
-// route
 import { applyAllRoutes } from './routes';
+import emailOtpRoutes from './routes/emailOtpRoutes.js'; // Import router OTP email
 
-
-require('dotenv').config();
+import dotenv from 'dotenv';
+dotenv.config();
 
 const startServer = async () => {
-    try {
-        const app = express();
+  try {
+    const app = express();
 
-        // config cors
-        app.use(cors({
-            origin: process.env.CLIENT_URL,
-            credentials: true,
-        }));
+    // Cấu hình CORS
+    app.use(cors({
+      origin: process.env.CLIENT_URL,
+      credentials: true,
+    }));
 
-        // Cấu hình ứng dụng
-        app.use(bodyParser.json());
-        app.use(cookieParser());
-        app.use(express.static('public'));
-        app.use(bodyParser.urlencoded({ extended: true }));
+    // Cấu hình ứng dụng
+    app.use(bodyParser.json());
+    app.use(cookieParser());
+    app.use(express.static('public'));
+    app.use(bodyParser.urlencoded({ extended: true }));
 
-        // Middleware
-        app.use(authenticateToken);
-        app.use(helmet(
-            {
-                contentSecurityPolicy: false, // tắt chế độ CSP, tránh lỗi khi load ảnh từ url
-                xFrameOptions: false, // tắt chế độ xFrameOptions, tránh tấn công clickjacking
-                crossOriginResourcePolicy: false, // tắt chế độ CORP, tránh lỗi khi load ảnh từ url
-            }
-        ));
+    // Middlewares bảo mật
+    app.use(authenticateToken);
+    app.use(helmet({
+      contentSecurityPolicy: false,
+      xFrameOptions: false,
+      crossOriginResourcePolicy: false,
+    }));
 
-        // Đăng ký route
-        applyAllRoutes(app);
+    // Đăng ký các route hiện có
+    applyAllRoutes(app);
 
-        // Kết nối cơ sở dữ liệu
-        await connectDB();
-        const INIT_DATABASE = process.env.INIT_DATABASE;
-        if (INIT_DATABASE === 'true') {
-            await sequelizeSync();
-            await seedData();
-            console.log("Database is initialized. Process has been completed");
-            return;
-        }
+    // Đăng ký router OTP email
+    // Các endpoint mới sẽ có dạng:
+    // POST /api/send-email-otp
+    // POST /api/verify-email-otp
+    app.use('/api', emailOtpRoutes);
 
-        // Khởi động server
-        const port = process.env.PORT || 3001;
-        app.listen(port, () => {
-            console.log(`Backend Nodejs is running on port : ${port}`);
-        });
-
-    } catch (error) {
-        console.error('Lỗi khi khởi động server:', error);
+    // Kết nối cơ sở dữ liệu
+    await connectDB();
+    const INIT_DATABASE = process.env.INIT_DATABASE;
+    if (INIT_DATABASE === 'true') {
+      await sequelizeSync();
+      await seedData();
+      console.log("Database is initialized. Process has been completed");
+      return;
     }
+
+    const port = process.env.PORT || 3001;
+    app.listen(port, () => {
+      console.log(`Backend Nodejs is running on port: ${port}`);
+    });
+  } catch (error) {
+    console.error('Lỗi khi khởi động server:', error);
+  }
 };
 
 startServer();

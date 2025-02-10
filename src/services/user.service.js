@@ -169,14 +169,17 @@ class UserService {
 
     async update(data) {
         try {
-            const { id, ...filteredData } = data;
-            const result = await this.model.update(filteredData, { where: { id: data.id } });
-            return result;
+          const { id, ...filteredData } = data;
+          // Lệnh update của Sequelize trả về một mảng, phần tử đầu tiên là số lượng dòng bị ảnh hưởng
+          const [affectedRows] = await this.model.update(filteredData, { where: { id } });
+          console.log(`UserService.update: Affected rows: ${affectedRows}`);
+          return affectedRows;
         } catch (error) {
-            console.error(error);
-            return null;
+          console.error("UserService.update error:", error);
+          return null;
         }
-    }
+      }
+      
 
     async delete(options = {}) {
         try {

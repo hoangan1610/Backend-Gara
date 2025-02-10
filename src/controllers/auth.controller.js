@@ -4,14 +4,142 @@ import { UserService } from "../services";
 import EmailService from '../services/email.service';
 import fs from 'fs';
 import { account_roles } from '../constants/constants';
+import { OTPService } from "../services/OTPService"; 
+import { SMSService } from "../services/SMSService"; 
+
 
 export default class AuthController {
+
+    sendOTPRegistration = async (req, res) => {
+        const { phone, password, first_name, last_name, birth, role } = req.body;
+        if (!phone || !password || !first_name || !last_name) {
+          return res.status(400).json({ message: "Vui lòng nhập các trường bắt buộc" });
+        }
+    
+        try {
+          // Kiểm tra nếu số điện thoại đã được xác thực (đã có user trong hệ thống)
+          const userExist = await new UserService().getUserInfoByPhone(phone);
+          if (userExist) {
+            return res.status(400).json({ message: "Số điện thoại đã được xác thực" });
+          }
+    
+          // Tạo OTP 6 chữ số
+          const otp = Math.floor(100000 + Math.random() * 900000).toString();
+          // Thiết lập thời gian hết hạn cho OTP (ví dụ: 10 phút)
+          const expiresAt = new Date(Date.now() + 10 * 60 * 1000);
+    
+          // Lưu thông tin OTP cùng dữ liệu đăng ký tạm thời
+          await new OTPService().saveOTP({
+            phone,
+            otp,
+            expiresAt,
+            password,
+            first_name: first_name.trim(),
+            last_name: last_name.trim(),
+            birth: birth || null,
+            role: role || "USER"
+          });
+    
+          // Gửi OTP qua SMS sử dụng SMSService
+          await new SMSService().sendOTP({ phone, otp });
+    
+          return res.status(200).json({ message: "OTP đã được gửi đến số điện thoại của bạn" });
+        } catch (error) {
+          console.error("Lỗi gửi OTP:", error);
+          return res.status(500).json({ message: "Lỗi máy chủ", error });
+        }
+      };
+    
+      /**
+       * Endpoint gửi lại OTP chỉ dựa vào số điện thoại.
+       * Yêu cầu: phone.
+       */
+      resendOTP = async (req, res) => {
+        const { phone } = req.body;
+        if (!phone) {
+          return res.status(400).json({ message: "Vui lòng nhập số điện thoại" });
+        }
+        try {
+          // Tạo OTP 6 chữ số mới
+          const otp = Math.floor(100000 + Math.random() * 900000).toString();
+          const expiresAt = new Date(Date.now() + 10 * 60 * 1000);
+          
+          // Lưu (hoặc cập nhật) OTP mới cho số điện thoại
+          await new OTPService().saveOTP({
+            phone,
+            otp,
+            expiresAt,
+            // Trong trường hợp gửi lại OTP, các thông tin đăng ký khác không bắt buộc
+            password: null,
+            first_name: null,
+            last_name: null,
+            birth: null,
+            role: null
+          });
+          
+          // Gửi OTP qua SMS
+          await new SMSService().sendOTP({ phone, otp });
+          
+          return res.status(200).json({ message: "OTP đã được gửi lại đến số điện thoại của bạn" });
+        } catch (error) {
+          console.error("Lỗi gửi lại OTP:", error);
+          return res.status(500).json({ message: "Lỗi máy chủ", error });
+        }
+      };
+    
+      /**
+       * Endpoint xác thực số điện thoại bằng OTP.
+       * Yêu cầu: phone, otp.
+       */
+      verifyPhone = async (req, res) => {
+        const { phone, otp } = req.body;
+        if (!phone || !otp) {
+          return res.status(400).json({ message: "Số điện thoại và OTP là bắt buộc" });
+        }
+    
+        try {
+          // Lấy bản ghi OTP theo số điện thoại
+          const otpRecord = await new OTPService().getOTPByPhone(phone);
+          if (!otpRecord) {
+            return res.status(400).json({ message: "OTP không tồn tại hoặc đã hết hạn" });
+          }
+    
+          // Kiểm tra OTP có khớp không
+          if (otpRecord.otp !== otp) {
+            return res.status(400).json({ message: "OTP không chính xác" });
+          }
+    
+          // Kiểm tra thời gian hết hạn của OTP
+          if (new Date() > otpRecord.expiresAt) {
+            return res.status(400).json({ message: "OTP đã hết hạn" });
+          }
+    
+          // Tạo tài khoản người dùng với các thông tin đã lưu trong bản ghi OTP
+          const newUser = await new UserService().createUser({
+            phone: otpRecord.phone,
+            password: otpRecord.password,
+            first_name: otpRecord.first_name,
+            last_name: otpRecord.last_name,
+            birth: otpRecord.birth,
+            role: otpRecord.role
+          });
+    
+          // Sau khi xác thực thành công, xoá bản ghi OTP
+          await new OTPService().deleteOTP(phone);
+    
+          return res.status(201).json({ message: "Số điện thoại đã được xác thực thành công", user: newUser });
+        } catch (error) {
+          console.error("Lỗi xác thực số điện thoại:", error);
+          return res.status(400).json({ message: "Xác thực thất bại", error });
+        }
+      };
 
     getPublicKey = (req, res) => {
         let path = require('path');
         const publicKey = fs.readFileSync(path.resolve(__dirname, '../keys/public.key'), 'utf8');
         res.send(publicKey);
     }
+
 
     registerUser = async (req, res) => {
         const { email, password, first_name, last_name, phone, birth } = req.body;
@@ -45,6 +173,9 @@ export default class AuthController {
         }
     }
 
+
+
+    
     loginUser = async (req, res) => {
         const { email, password } = req.body;
 

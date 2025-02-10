@@ -17,6 +17,13 @@ let authAPIRoute = (app) => {
     authAPI.post("/check-email", new AuthController().checkEmail);
     authAPI.post("/check-token", new AuthController().checkToken);
 
+      // Endpoint đăng ký ban đầu gửi OTP
+  authAPI.post("/send-otp", new AuthController().sendOTPRegistration);
+  // Endpoint gửi lại OTP chỉ dựa vào số điện thoại
+  authAPI.post("/resend-otp", new AuthController().resendOTP);
+  // Endpoint xác thực số điện thoại
+  authAPI.post("/verify-phone", new AuthController().verifyPhone);
+
     return app.use("/api/v1/auth", authAPI);
 }
 
