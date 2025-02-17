@@ -1,6 +1,13 @@
 import { account_roles } from "../constants/constants";
 import db from "../models";
-import { ProductFollowService, ProductOptionService, ProductService } from "../services";
+
+import { ProductFollowService, ProductOptionService, ProductService, OrderItemService } from "../services";
+import { Sequelize } from "sequelize"; // Import Sequelize nếu cần dùng
+
+const { sequelize, order_item, product } = db;
+
+
+
 
 const role_author_number = {
     [account_roles.NO_ROLE]: 0,
@@ -9,6 +16,7 @@ const role_author_number = {
     [account_roles.ADMIN]: 2,
     [account_roles.SUPER_ADMIN]: 3,
 }
+
 const canCreate = (req_role) => role_author_number[req_role] >= role_author_number[account_roles.ADMIN];
 const canRead = (req_role) => role_author_number[req_role] >= role_author_number[account_roles.NO_ROLE];
 const canUpdate = (req_role) => role_author_number[req_role] >= role_author_number[account_roles.ADMIN];
@@ -329,4 +337,35 @@ export default class ProductController {
             return res.status(500).json({ message: "Internal server error" });
         }
     }
+    async getBestSellers(limit = 10) {
+        try {
+            console.log("Fetching best sellers...");
+
+            const bestSellers = await db.order_item.findAll({
+                attributes: [
+                    "product_id",
+                    [sequelize.fn("SUM", sequelize.col("quantity")), "total_sold"]
+                ],
+                include: [
+                    {
+                        model: db.product,
+                        as: "product",
+                        attributes: ["id", "name", "price", "image_url", "category_id"]
+                    }
+                ],
+                group: ["product_id"],
+                order: [[sequelize.literal("total_sold"), "DESC"]],
+                limit: Number(limit) || 10,
+            });
+
+            // ✅ Kiểm tra có dữ liệu không
+            console.log("Best Sellers Data:", JSON.stringify(bestSellers, null, 2));
+
+            return bestSellers.map((item) => item.product);
+        } catch (error) {
+            console.error("❌ Error in getBestSellers:", error);
+            throw new Error("Database query failed");
+        }
+    }
 }
+

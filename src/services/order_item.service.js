@@ -80,3 +80,5 @@ export default class OrderItemService {
         }
     }
 }
+
+module.exports = OrderItemService
