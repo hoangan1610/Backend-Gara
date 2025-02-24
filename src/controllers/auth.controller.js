@@ -10,6 +10,59 @@ import { SMSService } from "../services/SMSService";
 
 export default class AuthController {
 
+    googleLogin = async (req, res) => {
+        const { accessToken } = req.body;
+        if (!accessToken) {
+          return res.status(400).json({ message: "Access token của Google là bắt buộc" });
+        }
+        try {
+          // Xác thực accessToken thông qua endpoint của Google
+          const googleResponse = await fetch(`https://www.googleapis.com/oauth2/v3/tokeninfo?access_token=${accessToken}`);
+          if (!googleResponse.ok) {
+            return res.status(400).json({ message: "Access token của Google không hợp lệ" });
+          }
+          const googleData = await googleResponse.json();
+          
+          // Kiểm tra email đã được xác thực trên Google chưa
+          if (googleData.email_verified !== "true" && googleData.email_verified !== true) {
+            return res.status(400).json({ message: "Email Google chưa được xác thực" });
+          }
+          
+          const { email, name, picture } = googleData;
+          
+          // Tìm kiếm user trong hệ thống dựa trên email
+          let user = await new UserService().getUserInfoByEmail(email);
+          if (!user) {
+            // Nếu user chưa tồn tại, tạo mới với thông tin từ Google
+            const newUserData = {
+              email,
+              first_name: name.split(" ")[0],
+              last_name: name.split(" ").slice(1).join(" ") || "",
+              role: account_roles.USER,
+              // Bạn có thể lưu thêm thông tin như picture nếu cần
+            };
+            user = await new UserService().createUser(newUserData);
+          }
+          
+          // Tạo token của hệ thống cho user
+          const access_token = jwt.sign(
+            { email: user.email, id: user.id, role: user.role },
+            process.env.ACCESS_TOKEN_SECRET_KEY,
+            { expiresIn: '1h' }
+          );
+          const refresh_token = jwt.sign(
+            { email: user.email, id: user.id, role: user.role },
+            process.env.REFRESH_TOKEN_SECRET_KEY,
+            { expiresIn: '1d' }
+          );
+          
+          return res.status(200).json({ message: "Đăng nhập Google thành công", user, access_token, refresh_token });
+        } catch (error) {
+          console.error("Google login error:", error);
+          return res.status(500).json({ message: "Lỗi máy chủ", error });
+        }
+      }
+
     sendOTPRegistration = async (req, res) => {
         const { phone, password, first_name, last_name, birth, role } = req.body;
         if (!phone || !password || !first_name || !last_name) {
@@ -141,37 +194,79 @@ export default class AuthController {
     }
 
 
-    registerUser = async (req, res) => {
-        const { email, password, first_name, last_name, phone, birth } = req.body;
-
-        if (
-            !email ||
-            !password ||
-            !first_name ||
-            !last_name
-        ) {
-            return res.status(400).json({ message: "Vui lòng nhập các trường bắt buộc" });
-        }
-
-        try {
-            const userExist = await new UserService().getUserInfoByEmail(email);
-            if (userExist) {
-                return res.status(400).json({ message: "Email đã tồn tại" });
-            }
-
-            const token = jwt.sign(
-                { email, password, first_name: first_name.trim(), last_name: last_name.trim(), phone, birth, role: account_roles.USER },
-                process.env.REGISTER_SECRET_KEY,
-                { expiresIn: '24h' }
-            );
-
-            await new EmailService().sendRegisterEmail({ email, token });
-
-            return res.status(200).json({ message: "Email xác thực đã được gửi" });
-        } catch (error) {
-            return res.status(500).json({ message: "Lỗi máy chủ", error });
-        }
+    // Phương thức đăng ký sử dụng OTP (đã gửi OTP qua email)
+  registerUser = async (req, res) => {
+    const { email, password, first_name, last_name, phone, birth } = req.body;
+  
+    if (!email || !password || !first_name || !last_name) {
+      return res.status(400).json({ message: "Vui lòng nhập các trường bắt buộc" });
     }
+  
+    try {
+      const userExist = await new UserService().getUserInfoByEmail(email);
+      if (userExist) {
+        return res.status(400).json({ message: "Email đã tồn tại" });
+      }
+  
+      // Tạo OTP 6 chữ số
+      const otp = Math.floor(100000 + Math.random() * 900000).toString();
+  
+      // Lưu thông tin đăng ký tạm thời cùng OTP (cho demo; production nên dùng Redis hoặc DB)
+      global.registerOtpStore = global.registerOtpStore || {};
+      global.registerOtpStore[email] = {
+        otp,
+        expires: Date.now() + 5 * 60 * 1000, // OTP có hiệu lực 5 phút
+        registrationData: {
+          email,
+          password, // Bạn nên mã hóa password trước khi lưu
+          first_name: first_name.trim(),
+          last_name: last_name.trim(),
+          phone,
+          birth,
+          role: account_roles.USER,
+        },
+      };
+  
+      // Gửi OTP về email người dùng
+      await new EmailService().sendRegisterEmailOtp({ email, otp });
+  
+      return res.status(200).json({ message: "Mã OTP xác thực đã được gửi đến email của bạn" });
+    } catch (error) {
+      console.error("Error in registerUser:", error);
+      return res.status(500).json({ message: "Lỗi máy chủ", error });
+    }
+  };
+  
+    // Endpoint xác thực OTP đăng ký
+    verifyRegisterOtp = async (req, res) => {
+      const { email, otp } = req.body;
+      if (!email || !otp) {
+        return res.status(400).json({ message: "Email và OTP là bắt buộc" });
+      }
+  
+      const record = global.registerOtpStore && global.registerOtpStore[email];
+      if (!record) {
+        return res.status(400).json({ message: "OTP không tồn tại hoặc đã hết hạn" });
+      }
+  
+      if (Date.now() > record.expires) {
+        delete global.registerOtpStore[email];
+        return res.status(400).json({ message: "OTP đã hết hạn" });
+      }
+  
+      if (record.otp !== otp) {
+        return res.status(400).json({ message: "OTP không hợp lệ" });
+      }
+  
+      // Nếu OTP hợp lệ, tiến hành tạo tài khoản
+      const registrationData = record.registrationData;
+      const createdUser = await new UserService().createUser(registrationData);
+  
+      // Xóa OTP sau khi xác thực thành công
+      delete global.registerOtpStore[email];
+  
+      return res.status(200).json({ message: "Đăng ký thành công", user: createdUser });
+    };
 
 
 
@@ -242,29 +337,105 @@ export default class AuthController {
         }
     }
 
-    requestPasswordReset = async (req, res) => {
-        try {
-            const { email } = req.body;
-            if (!email) {
-                return res.status(400).json({ message: "Email là bắt buộc" });
-            }
-
-            const user = await new UserService().getUserInfoByEmail(email);
-            if (!user) {
-                return res.status(404).json({ message: "Không tìm thấy email" });
-            }
-
-            const token = jwt.sign({ email, old_password: user.hashed_password }, process.env.RESET_PASSWORD_SECRET_KEY, { expiresIn: '5m' });
-            await new EmailService().sendResetPasswordEmail({ email, token });
-
-            return res.status(200).json({ message: "Email đặt lại mật khẩu đã được gửi" });
-        } catch (error) {
-            console.log(error);
-            return res.status(500).json({ message: "Lỗi máy chủ" });
+    async requestPasswordReset(req, res) {
+      try {
+        const { email } = req.body;
+        if (!email) {
+          return res.status(400).json({ message: "Email là bắt buộc" });
         }
+    
+        const userService = new UserService();
+        const user = await userService.getUserInfoByEmail(email);
+        if (!user) {
+          return res.status(404).json({ message: "Không tìm thấy email" });
+        }
+    
+        // Tạo OTP 6 chữ số
+        const otp = Math.floor(100000 + Math.random() * 900000).toString();
+    
+        // Lưu OTP tạm thời vào biến toàn cục (cho demo; production nên dùng Redis hoặc DB)
+        global.forgotPasswordOtpStore = global.forgotPasswordOtpStore || {};
+        global.forgotPasswordOtpStore[email] = {
+          otp,
+          expires: Date.now() + 5 * 60 * 1000, // OTP có hiệu lực 5 phút
+        };
+    
+        // Gửi OTP qua email
+        const emailService = new EmailService();
+        await emailService.sendResetPasswordOTP({ email, otp });
+    
+        return res.status(200).json({ message: "Mã OTP đã được gửi đến email của bạn" });
+      } catch (error) {
+        console.error("Error in requestPasswordReset:", error);
+        return res.status(500).json({ message: "Lỗi máy chủ", error });
+      }
     }
+    
+    // Hàm xác thực OTP khi người dùng nhập từ FE
+    async verifyResetOTP(req, res) {
+      try {
+        const { email, otp } = req.body;
+        if (!email || !otp) {
+          return res.status(400).json({ message: "Email và OTP là bắt buộc" });
+        }
+    
+        // Lấy thông tin OTP đã lưu từ biến toàn cục
+        global.forgotPasswordOtpStore = global.forgotPasswordOtpStore || {};
+        const storedRecord = global.forgotPasswordOtpStore[email];
+    
+        if (!storedRecord) {
+          return res.status(400).json({ message: "OTP không tồn tại hoặc đã hết hạn" });
+        }
+    
+        // Kiểm tra thời gian hiệu lực
+        if (Date.now() > storedRecord.expires) {
+          delete global.forgotPasswordOtpStore[email];
+          return res.status(400).json({ message: "OTP đã hết hạn" });
+        }
+    
+        // Kiểm tra OTP có khớp không
+        if (storedRecord.otp !== otp) {
+          return res.status(400).json({ message: "OTP không hợp lệ" });
+        }
+    
+        // Nếu OTP hợp lệ, xóa OTP khỏi store (để không lặp lại)
+        delete global.forgotPasswordOtpStore[email];
+    
+        // Ở đây bạn có thể chuyển hướng FE sang màn hình đặt lại mật khẩu
+        // Hoặc trả về một mã thông báo để cho phép FE gọi endpoint resetPassword
+        return res.status(200).json({ message: "OTP xác thực thành công" });
+      } catch (error) {
+        console.error("Error in verifyResetOTP:", error);
+        return res.status(500).json({ message: "Lỗi máy chủ" });
+      }
+    }
+    
+    
+    async resetPassword(req, res) {
+      try {
+        const { email, newPassword } = req.body;
+        if (!email || !newPassword) {
+          return res.status(400).json({ message: "Email và mật khẩu mới là bắt buộc" });
+        }
+    
+        const userService = new UserService();
+        const user = await userService.getUserInfoByEmail(email);
+        if (!user) {
+          return res.status(404).json({ message: "Không tìm thấy email" });
+        }
+    
+        // Cập nhật mật khẩu mới (hãy nhớ hash mật khẩu trước khi lưu nếu cần)
+        const updatedUser = await userService.updateUserPassword({ email, password: newPassword });
+        return res.status(200).json({ message: "Mật khẩu đã được thay đổi thành công", user: updatedUser });
+      } catch (error) {
+        console.error(error);
+        return res.status(500).json({ message: "Lỗi máy chủ" });
+      }
+    }
+    
+    
 
-    resetPassword = async (req, res) => {
+    resetPassword2 = async (req, res) => {
         const { token, password } = req.body;
         if (!token || !password) {
             return res.status(400).json({ message: "Token và mật khẩu là bắt buộc" });
@@ -356,5 +527,4 @@ export default class AuthController {
             console.log(error);
             return res.status(400).json({ message: "Token không hợp lệ" });
         }
-    }
-}
+    }}

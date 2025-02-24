@@ -1,52 +1,94 @@
 import { contact_information, email_constants, logos } from "../constants/constants";
 import sendEmail from "../utils/sendEmail";
 import { formatNumberWithCommas } from "../utils/stringUtils";
+import nodemailer from 'nodemailer';
+
 
 export default class EmailService {
   constructor() { }
 
-  sendRegisterEmail = async ({ email, token }) => {
-    const registerLink = `${process.env.CLIENT_URL}/auth/verify-email/${token}`;
+  async sendUpdateEmailOtp({ email, otp }) {
+    try {
+      // Tạo transporter sử dụng cấu hình từ biến môi trường
+      const transporter = nodemailer.createTransport({
+        host: process.env.EMAIL_HOST, // Ví dụ: 'smtp.gmail.com'
+        port: Number(process.env.EMAIL_PORT), // Ví dụ: 587
+        secure: process.env.EMAIL_SECURE === 'true', // true nếu sử dụng port 465
+        auth: {
+          user: process.env.EMAIL_USER, // Email của bạn
+          pass: process.env.EMAIL_PASS, // Mật khẩu hoặc app password
+        },
+      });
+
+      // Cấu hình nội dung email
+      const mailOptions = {
+        from: process.env.EMAIL_FROM, // Ví dụ: '"Your App" <no-reply@yourapp.com>'
+        to: email,
+        subject: 'Xác thực đổi email',
+        text: `Mã OTP của bạn là: ${otp}. OTP này có hiệu lực trong 5 phút.`,
+        // Nếu muốn gửi dạng HTML:
+        // html: `<p>Mã OTP của bạn là: <strong>${otp}</strong>. OTP này có hiệu lực trong 5 phút.</p>`
+      };
+
+      // Gửi email
+      await transporter.sendMail(mailOptions);
+      console.log(`OTP đã được gửi đến ${email}`);
+      return true;
+    } catch (error) {
+      console.error("Error in sendUpdateEmailOtp:", error);
+      throw error;
+    }
+  }
+
+
+  async sendResetPasswordOTP({ email, otp }) {
     await sendEmail({
       from: process.env.SMTP_EMAIL,
       to: email,
-      subject: 'Xác thực Email',
+      subject: 'Mã OTP đặt lại mật khẩu',
       html: `
-      <div style="background-color: #f3f4f6; min-height: 100vh; padding: 1rem;">
-        <div style="max-width: 40rem; margin: 0 auto; background-color: white; border-radius: 0.5rem; box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1); overflow: hidden;">
-          <div style="padding: 2rem;">
-            <div style="text-align: center; margin-bottom: 2rem;">
-              <img src="https://images.unsplash.com/photo-1496200186974-4293800e2c20?w=150&h=150&fit=crop" alt="Company Logo" style="width: 8rem; height: 8rem; margin: 0 auto; border-radius: 50%; object-fit: cover; box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);">
+        <div style="background-color: #f3f4f6; min-height: 100vh; padding: 1rem;">
+          <div style="max-width: 40rem; margin: 0 auto; background-color: white; border-radius: 0.5rem; box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1); overflow: hidden;">
+            <div style="padding: 2rem;">
+              <h1 style="font-size: 1.875rem; font-weight: bold; color: #1f2937; text-align: center; margin-bottom: 1rem;">
+                Mã OTP đặt lại mật khẩu
+              </h1>
+              <p style="color: #4b5563; font-size: 1.125rem; text-align: center; margin-bottom: 2rem;">
+                Mã OTP của bạn là: <strong>${otp}</strong>
+              </p>
+              <p style="color: #6b7280; text-align: center;">Mã này có hiệu lực trong 5 phút.</p>
             </div>
-            
-            <h1 style="font-size: 1.875rem; font-weight: bold; color: #1f2937; text-align: center; margin-bottom: 1rem;">Chào mừng bạn đến với Cộng đồng của chúng tôi!</h1>
-            <p style="color: #4b5563; font-size: 1.125rem; text-align: center; margin-bottom: 2rem;">Cảm ơn bạn đã đăng ký với chúng tôi. Hãy xác nhận email để kích hoạt tài khoản.</p>
-            
-            <div style="text-align: center; margin-bottom: 2rem;">
-              <a href="${registerLink}" style="display: inline-block; background-color: #2563eb; color: white; font-weight: bold; padding: 0.75rem 2rem; border-radius: 9999px; transition: transform 0.3s, box-shadow 0.3s; text-decoration: none;">
-                Xác Thực Địa Chỉ Email
-              </a>
-            </div>
-            
-            <div style="border-top: 1px solid #e5e7eb; padding-top: 1.5rem;">
-              <p style="color: #6b7280; font-size: 0.875rem; text-align: center;">Nếu bạn không yêu cầu tạo tài khoản, vui lòng bỏ qua email này.</p>
-            </div>
-          </div>
-          
-          <footer style="background-color: #f9fafb; padding: 1.5rem 2rem;">
-            <div style="text-align: center; color: #4b5563; font-size: 0.875rem;">
-              <p style="margin-bottom: 0.5rem;">© 2024 Công ty. Mọi quyền được bảo lưu.</p>
-              <div style="display: inline-block;">
-                <a href="${email_constants.security_policy_link}" style="color: #2563eb; text-decoration: none; margin-right: 1rem;">Chính sách bảo mật</a>
-                <a href="${email_constants.terms_of_service_link}" style="color: #2563eb; text-decoration: none; margin-right: 1rem;">Điều khoản dịch vụ</a>
-                <a href="${email_constants.contact_help_link}" style="color: #2563eb; text-decoration: none;">Liên hệ hỗ trợ</a>
+            <footer style="background-color: #f9fafb; padding: 1.5rem 2rem;">
+              <div style="text-align: center; color: #4b5563; font-size: 0.875rem;">
+                <p style="margin-bottom: 0.5rem;">© 2024 Công ty. Mọi quyền được bảo lưu.</p>
+                <a href="${process.env.CONTACT_HELP_LINK}" style="color: #2563eb; text-decoration: none;">
+                  Liên hệ hỗ trợ
+                </a>
               </div>
-            </div>
-          </footer>
+            </footer>
+          </div>
         </div>
-      </div>`
+      `
     });
   }
+
+  
+
+  sendRegisterEmailOtp = async ({ email, otp }) => {
+    await sendEmail({
+      from: process.env.SMTP_EMAIL,
+      to: email,
+      subject: 'Xác thực Email - Mã OTP của bạn',
+      html: `
+        <div style="padding: 20px; font-family: Arial, sans-serif;">
+          <h2>Xác thực Email</h2>
+          <p>Mã OTP của bạn là: <strong>${otp}</strong></p>
+          <p>Mã OTP này sẽ hết hạn trong 5 phút.</p>
+        </div>
+      `
+    });
+  }
+
 
   sendResetPasswordEmail = async ({ email, token }) => {
     const resetLink = `${process.env.CLIENT_URL}/auth/reset-password/${token}`;

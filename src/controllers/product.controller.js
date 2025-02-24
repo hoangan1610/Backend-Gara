@@ -337,35 +337,34 @@ export default class ProductController {
             return res.status(500).json({ message: "Internal server error" });
         }
     }
-    async getBestSellers(limit = 10) {
+    async getBestSellers(req, res) {
         try {
             console.log("Fetching best sellers...");
+            const limit = Number(req.query.limit) || 10; // Lấy limit từ query params
 
-            const bestSellers = await db.order_item.findAll({
-                attributes: [
-                    "product_id",
-                    [sequelize.fn("SUM", sequelize.col("quantity")), "total_sold"]
-                ],
-                include: [
-                    {
-                        model: db.product,
-                        as: "product",
-                        attributes: ["id", "name", "price", "image_url", "category_id"]
-                    }
-                ],
-                group: ["product_id"],
-                order: [[sequelize.literal("total_sold"), "DESC"]],
-                limit: Number(limit) || 10,
+            const bestSellers = await db.sequelize.query(`
+                SELECT 
+                    oi.product_id, 
+                    SUM(oi.quantity) AS total_sold,
+                    p.id, p.name, p.price, p.image_url, p.category_id
+                FROM order_items oi
+                STRAIGHT_JOIN products p ON oi.product_id = p.id
+                GROUP BY oi.product_id, p.id, p.name, p.price, p.image_url, p.category_id
+                ORDER BY total_sold DESC
+                LIMIT :limit;
+            `, {
+                replacements: { limit },
+                type: db.Sequelize.QueryTypes.SELECT,
             });
 
-            // ✅ Kiểm tra có dữ liệu không
-            console.log("Best Sellers Data:", JSON.stringify(bestSellers, null, 2));
-
-            return bestSellers.map((item) => item.product);
+            console.log("📤 Sending response:", JSON.stringify(bestSellers, null, 2));
+            return res.status(200).json(bestSellers); // **Gửi response về client**
         } catch (error) {
-            console.error("❌ Error in getBestSellers:", error);
-            throw new Error("Database query failed");
+            console.error("🚨 Error in getBestSellers:", error);
+            return res.status(500).json({ message: "Internal Server Error" }); // **Xử lý lỗi**
         }
     }
+    
+    
 }
 

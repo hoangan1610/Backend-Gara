@@ -60,33 +60,67 @@ class UserService {
 
     async getFullUserInfoById(user_id) {
         try {
-            const user = await this.model.findOne({
-                where: { id: user_id },
-                include: [{
-                    model: db.cart,
-                    include: [{
-                        model: db.cart_item,
-                        include: [db.product_option, { model: db.product, include: [db.product_option] }]
-                    }]
-                }, {
-                    model: db.order,
-                    include: [{
-                        model: db.order_item,
-                        include: [{ model: db.product, include: [db.product_option] }, db.product_option]
-                    }, {
-                        model: db.payment
-                    }]
-                }, {
-                    model: db.product_follow
-                }]
-            });
-            return user || null;
+          const user = await this.model.findOne({
+            where: { id: user_id },
+            include: [
+              {
+                model: db.cart,
+                as: 'cart',
+                include: [
+                  {
+                    model: db.cart_item,
+                    as: 'cart_items',
+                    include: [
+                      db.product_option, // Nếu không sử dụng alias thì không cần "as"
+                      { 
+                        model: db.product, 
+                        as: 'product', 
+                        include: [
+                          { model: db.product_option, as: 'product_options' } // Sử dụng alias "product_options"
+                        ]
+                      }
+                    ]
+                  }
+                ]
+              },
+              {
+                model: db.order,
+                as: 'orders',
+                include: [
+                  {
+                    model: db.order_item,
+                    as: 'order_items',
+                    include: [
+                      { 
+                        model: db.product, 
+                        as: 'product', 
+                        include: [
+                          { model: db.product_option, as: 'product_options' }
+                        ]
+                      },
+                      { model: db.product_option, as: 'product_option' } // Nếu association này được định nghĩa với alias "product_option"
+                    ]
+                  },
+                  {
+                    model: db.payment,
+                    as: 'payment'
+                  }
+                ]
+              },
+              {
+                model: db.product_follow,
+                as: 'product_follows'
+              }
+            ]
+          });
+          return user || null;
         } catch (error) {
-            console.error(error);
-            return null;
+          console.error(error);
+          return null;
         }
-    }
-
+      }
+      
+      
     async updateUser(data) {
         try {
             const user = await this.model.findOne({ where: { id: data.id } });

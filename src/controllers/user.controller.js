@@ -2,6 +2,7 @@ import jwt from 'jsonwebtoken';
 import db from '../models';
 import { CartService, OrderService, UserService } from '../services';
 import { account_roles, order_status, payment_method_codes } from '../constants/constants';
+import EmailService from '../services/email.service';
 
 const role_author_number = {
     [account_roles.NO_ROLE]: 0,
@@ -24,45 +25,122 @@ const canDelete = (req_role, user_role) => {
 }
 export default class UserController {
 
-    async updateInfo(req, res) {
+
+    sendUpdateOtp = async (req, res) => {
         try {
-            if (!req.body) {
-                return res.status(400).json({ message: "Missing user info" });
-            }
-            if (!req.body.id) {
-                return res.status(400).json({ message: "Missing user id" });
-            }
-            const { id, ...formData } = req.body;
-            if (req.user?.id != id) {
-                return res.status(403).json({ message: "You don't have permission to edit this user" });
-            }
-
-            let update = formData;
-
-            if (update.password) {
-                if (update.password.length < 8) {
-                    return res.status(400).json({ message: "Password must be at least 8 characters" });
-                }
-
-                let user = await new UserService().getOne({ where: { id } });
-
-                let old_password_match = await new UserService().compareUserPassword(update.old_password, user.hashed_password);
-                if (!old_password_match) {
-                    return res.status(400).json({ message: "Old password is incorrect" });
-                }
-                update.hashed_password = await new UserService().hashUserPassword(update.password);
-                delete update.password;
-                delete update.old_password;
-            }
-
-            await new UserService().update({ id, ...update });
-
-            return res.status(200).json({ message: "Update successfully" });
+          let { email } = req.body;
+          if (!email) {
+            return res.status(400).json({ message: "Email là bắt buộc" });
+          }
+          // Chuẩn hóa email
+          email = email.trim().toLowerCase();
+    
+          // Tạo OTP 6 chữ số
+          const otp = Math.floor(100000 + Math.random() * 900000).toString();
+    
+          // Lưu thông tin OTP tạm thời (cho demo; production nên dùng Redis hoặc DB)
+          global.updateOtpStore = global.updateOtpStore || {};
+          global.updateOtpStore[email] = {
+            otp,
+            expires: Date.now() + 5 * 60 * 1000, // OTP có hiệu lực 5 phút
+            verified: false,
+          };
+    
+          // Gửi OTP về email người dùng (EmailService cần có phương thức sendResetPasswordOTP)
+          await new EmailService().sendResetPasswordOTP({ email, otp });
+    
+          return res.status(200).json({ message: "Mã OTP xác thực đã được gửi đến email của bạn" });
         } catch (error) {
-            console.error(error);
-            return res.status(500).json({ message: "Internal server error" });
+          console.error("Error in sendUpdateOtp:", error);
+          return res.status(500).json({ message: "Lỗi máy chủ", error });
         }
-    }
+      };
+    
+      // Endpoint xác thực OTP cập nhật email
+      verifyUpdateOtp = async (req, res) => {
+        try {
+          let { email, otp } = req.body;
+          if (!email || !otp) {
+            return res.status(400).json({ message: "Email và OTP là bắt buộc" });
+          }
+          // Chuẩn hóa email
+          email = email.trim().toLowerCase();
+    
+          global.updateOtpStore = global.updateOtpStore || {};
+          const record = global.updateOtpStore[email];
+          if (!record) {
+            return res.status(400).json({ message: "OTP không tồn tại hoặc đã hết hạn" });
+          }
+          if (Date.now() > record.expires) {
+            delete global.updateOtpStore[email];
+            return res.status(400).json({ message: "OTP đã hết hạn" });
+          }
+          if (record.otp !== otp) {
+            return res.status(400).json({ message: "OTP không hợp lệ" });
+          }
+          // Đánh dấu OTP đã xác thực nhưng không xoá ngay
+          record.verified = true;
+          return res.status(200).json({ message: "OTP xác thực thành công" });
+        } catch (error) {
+          console.error(error);
+          return res.status(500).json({ message: "Lỗi máy chủ" });
+        }
+      };
+      
+      
+  
+      async updateInfo(req, res) {
+        try {
+          if (!req.body) {
+            return res.status(400).json({ message: "Missing user info" });
+          }
+          if (!req.body.id) {
+            return res.status(400).json({ message: "Missing user id" });
+          }
+          const { id, ...formData } = req.body;
+          if (req.user?.id != id) {
+            return res.status(403).json({ message: "You don't have permission to edit this user" });
+          }
+          
+          // Nếu có cập nhật email mới và email mới khác với email hiện tại,
+          // chuyển email về dạng chuẩn (trim, toLowerCase) để so sánh
+          if (formData.email && formData.email.trim().toLowerCase() !== req.user.email.trim().toLowerCase()) {
+            global.updateOtpStore = global.updateOtpStore || {};
+            const normalizedEmail = formData.email.trim().toLowerCase();
+            console.log("OTP Record for", normalizedEmail, ":", global.updateOtpStore[normalizedEmail]); // Debug log
+            const otpRecord = global.updateOtpStore[normalizedEmail];
+            if (!otpRecord || !otpRecord.verified) {
+              return res.status(400).json({ message: "Email mới chưa được xác thực OTP" });
+            }
+            // Xóa record OTP sau khi xác thực thành công
+            delete global.updateOtpStore[normalizedEmail];
+          }
+      
+          // Nếu có cập nhật mật khẩu, xử lý việc xác thực mật khẩu cũ và mã hóa mật khẩu mới
+          if (formData.password) {
+            if (formData.password.length < 8) {
+              return res.status(400).json({ message: "Password must be at least 8 characters" });
+            }
+            let user = await new UserService().getOne({ where: { id } });
+            let old_password_match = await new UserService().compareUserPassword(formData.old_password, user.hashed_password);
+            if (!old_password_match) {
+              return res.status(400).json({ message: "Old password is incorrect" });
+            }
+            formData.hashed_password = await new UserService().hashUserPassword(formData.password);
+            delete formData.password;
+            delete formData.old_password;
+          }
+          
+          // Cập nhật thông tin người dùng với dữ liệu mới (bao gồm email mới nếu có)
+          await new UserService().update({ id, ...formData });
+          return res.status(200).json({ message: "Update successfully" });
+        } catch (error) {
+          console.error(error);
+          return res.status(500).json({ message: "Internal server error" });
+        }
+      }
+      
+  
 
     async cancelOrder(req, res) {
         try {
