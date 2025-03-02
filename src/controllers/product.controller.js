@@ -341,21 +341,21 @@ export default class ProductController {
         try {
             console.log("Fetching best sellers...");
             const limit = Number(req.query.limit) || 10; // Lấy limit từ query params
-
             const bestSellers = await db.sequelize.query(`
                 SELECT 
                     oi.product_id, 
                     SUM(oi.quantity) AS total_sold,
-                    p.id, p.name, p.price, p.image_url, p.category_id
+                    p.id, p.name, p.price, p.image_url, p.category_id, p.path
                 FROM order_items oi
                 STRAIGHT_JOIN products p ON oi.product_id = p.id
-                GROUP BY oi.product_id, p.id, p.name, p.price, p.image_url, p.category_id
+                GROUP BY oi.product_id, p.id, p.name, p.price, p.image_url, p.category_id, p.path
                 ORDER BY total_sold DESC
                 LIMIT :limit;
             `, {
                 replacements: { limit },
                 type: db.Sequelize.QueryTypes.SELECT,
             });
+            
 
             console.log("📤 Sending response:", JSON.stringify(bestSellers, null, 2));
             return res.status(200).json(bestSellers); // **Gửi response về client**
