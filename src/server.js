@@ -56,6 +56,7 @@ const startServer = async () => {
 
     const port = process.env.PORT || 3001;
     app.listen(port, () => {
+      console.log('NODE_OPTIONS:', process.env.NODE_OPTIONS);
       console.log(`Backend Nodejs is running on port: ${port}`);
     });
   } catch (error) {

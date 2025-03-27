@@ -11,7 +11,7 @@ class ProductService {
             const results = await this.model.findAndCountAll({
                 where: {
                     ...(category_id && parseInt(category_id) !== -1 && { category_id: parseInt(category_id) }),
-                    ...(searchTerm && { path: { [db.Sequelize.Op.like]: `%${searchTerm}%` } }),
+                    ...(searchTerm && { name: { [db.Sequelize.Op.like]: `%${searchTerm}%` } }),
                     ...(category_path && { '$category.path$': category_path })
                 },
                 include: [db.category],

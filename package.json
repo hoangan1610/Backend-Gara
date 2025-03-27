@@ -4,7 +4,7 @@
   "main": "index.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
-    "start": "nodemon --exec babel-node src/server.js",
+    "start": "node --max-old-space-size=4096 ./node_modules/nodemon/bin/nodemon.js --exec babel-node src/server.js",
     "sequelize": "sequelize",
     "db:migrate": "sequelize db:migrate",
     "db:seed": "sequelize db:seed:all",

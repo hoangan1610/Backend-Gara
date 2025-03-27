@@ -1,4 +1,3 @@
-
 import db from "../models";
 
 export default class OrderService {
@@ -18,7 +17,7 @@ export default class OrderService {
 
   async create(data, options = {}) {
     try {
-      console.log(data)
+      console.log(data);
       const result = await this.model.create(data, options);
       return result;
     } catch (error) {
@@ -88,4 +87,28 @@ export default class OrderService {
       return null;
     }
   }
+
+  // Thêm method createOrderItem
+  async createOrderItem(orderId, item, options = {}) {
+    try {
+      // Tính giá: nếu có product_option.price thì ưu tiên, ngược lại lấy product.price
+      const price = item.product_option && item.product_option.price
+        ? item.product_option.price
+        : item.product.price;
+      // Đặt currency mặc định, ví dụ "VND"
+      const currency = "VND";
+      return await db.order_item.create({
+        order_id: orderId,
+        product_id: item.product.id,
+        product_option_id: item.product_option?.id || null,
+        quantity: item.quantity,
+        price: price,
+        currency: currency
+      }, options);
+    } catch (error) {
+      console.error("Error in createOrderItem:", error);
+      throw error;
+    }
+  }
+  
 }

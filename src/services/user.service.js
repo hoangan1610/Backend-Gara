@@ -62,21 +62,34 @@ class UserService {
         try {
           const user = await this.model.findOne({
             where: { id: user_id },
+            // Cập nhật attributes để lấy thêm email, birth, gender, image_url
+            attributes: ['id', 'email', 'first_name', 'last_name', 'address', 'phone', 'gender', 'birth', 'image_url'],
             include: [
               {
                 model: db.cart,
                 as: 'cart',
+                attributes: ['id'],
                 include: [
                   {
                     model: db.cart_item,
                     as: 'cart_items',
+                    attributes: ['id', 'quantity'],
                     include: [
-                      db.product_option, // Nếu không sử dụng alias thì không cần "as"
-                      { 
-                        model: db.product, 
-                        as: 'product', 
+                      {
+                        model: db.product_option,
+                        as: 'product_option',
+                        attributes: ['id', 'name', 'price']
+                      },
+                      {
+                        model: db.product,
+                        as: 'product',
+                        attributes: ['id', 'name', 'image_url'],
                         include: [
-                          { model: db.product_option, as: 'product_options' } // Sử dụng alias "product_options"
+                          {
+                            model: db.product_option,
+                            as: 'product_options',
+                            attributes: ['id', 'name', 'price']
+                          }
                         ]
                       }
                     ]
@@ -86,30 +99,38 @@ class UserService {
               {
                 model: db.order,
                 as: 'orders',
+                attributes: ['id', 'createdAt', 'status'],
+                limit: 5,
+                order: [['createdAt', 'DESC']],
                 include: [
                   {
                     model: db.order_item,
                     as: 'order_items',
+                    attributes: ['id', 'quantity'],
                     include: [
-                      { 
-                        model: db.product, 
-                        as: 'product', 
-                        include: [
-                          { model: db.product_option, as: 'product_options' }
-                        ]
+                      {
+                        model: db.product,
+                        as: 'product',
+                        attributes: ['id', 'name', 'image_url']
                       },
-                      { model: db.product_option, as: 'product_option' } // Nếu association này được định nghĩa với alias "product_option"
+                      {
+                        model: db.product_option,
+                        as: 'product_option',
+                        attributes: ['id', 'name', 'price']
+                      }
                     ]
                   },
                   {
                     model: db.payment,
-                    as: 'payment'
+                    as: 'payment',
+                    attributes: ['id', 'status', 'amount']
                   }
                 ]
               },
               {
                 model: db.product_follow,
-                as: 'product_follows'
+                as: 'product_follows',
+                attributes: ['id', 'product_id']
               }
             ]
           });
@@ -119,6 +140,10 @@ class UserService {
           return null;
         }
       }
+      
+      
+      
+      
       
       
     async updateUser(data) {

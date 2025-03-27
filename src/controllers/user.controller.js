@@ -180,15 +180,16 @@ export default class UserController {
 
     async getUserByToken(req, res) {
         try {
-            const token = req.headers.authorization.split(' ')[1];
-            const decoded = jwt.verify(token, process.env.ACCESS_TOKEN_SECRET_KEY);
-            const user = await new UserService().getFullUserInfoById(decoded.id);
-            return res.status(200).json(user);
+          const token = req.headers.authorization.split(' ')[1];
+          const decoded = jwt.verify(token, process.env.ACCESS_TOKEN_SECRET_KEY);
+          const user = await new UserService().getFullUserInfoById(decoded.id);
+          return res.status(200).json(user);
         } catch (error) {
-            console.error(error);
-            return res.status(500).json({ message: error.message });
+          console.error(error);
+          return res.status(500).json({ message: error.message });
         }
-    }
+      }
+      
 
     async getOrders(req, res) {
         try {
