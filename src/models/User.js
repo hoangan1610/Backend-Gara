@@ -1,7 +1,5 @@
 'use strict';
-const {
-    Model
-} = require('sequelize');
+const { Model } = require('sequelize');
 
 // user bao gồm: email, password, first_name, last_name, address, phone, gender, roleId, positionId
 module.exports = (sequelize, DataTypes) => {
@@ -14,7 +12,7 @@ module.exports = (sequelize, DataTypes) => {
             user.hasMany(models.task, { foreignKey: 'assignedTo', onDelete: 'SET NULL', as: 'employee' });
         }
         getFullName() {
-            return `${this.firstName} ${this.lastName}`;
+            return `${this.first_name} ${this.last_name}`;
         }
 
         toJSON() {
@@ -75,6 +73,12 @@ module.exports = (sequelize, DataTypes) => {
             type: DataTypes.STRING,
             allowNull: true
         },
+        // Thêm cột loyaltyPoints để lưu điểm thưởng
+        loyaltyPoints: {
+            type: DataTypes.INTEGER,
+            allowNull: false,
+            defaultValue: 0
+        }
     }, {
         sequelize,
         modelName: 'user',
@@ -82,4 +86,4 @@ module.exports = (sequelize, DataTypes) => {
     });
 
     return user;
-}
+};

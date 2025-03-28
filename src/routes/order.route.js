@@ -1,3 +1,4 @@
+// routes/order.route.js
 import express from "express";
 import { OrderController } from "../controllers";
 
@@ -14,6 +15,9 @@ let orderRoute = (app) => {
   route.put("/update/:id", controller.updateOrderItem);
   route.post('/create-payment-url/vnpay', controller.createVNPayPaymentUrl);
   route.post('/confirm-payment/vnpay', controller.confirmVNPayPayment);
+
+  // Endpoint kiểm tra mua sản phẩm
+  route.get("/has-purchased/:productId", controller.hasPurchasedProduct);
 
   return app.use("/api/v1/order", route);
 };

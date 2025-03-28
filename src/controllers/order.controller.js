@@ -30,6 +30,37 @@ export default class OrderController {
   }
 
     
+
+  // Phương thức kiểm tra xem user đã mua sản phẩm có id = productId chưa
+  hasPurchasedProduct = async (req, res) => {
+    try {
+      const user = await this.getUserByToken(req, res);
+      if (!user) return res.status(401).json({ message: "Unauthorized" });
+      
+      const { productId } = req.params;
+      // Lấy tất cả các đơn hàng của user
+      const orders = await db.order.findAll({
+        where: { user_id: user.id },
+        include: [{ model: db.order_item }]
+      });
+      
+      // Lọc ra các đơn hàng có chứa sản phẩm với productId
+      const matchingOrders = orders.filter(order => 
+        order.order_items.some(item => item.product_id == productId)
+      );
+      
+      if (matchingOrders.length > 0) {
+        const orderIds = matchingOrders.map(order => order.id);
+        return res.status(200).json({ hasPurchased: true, orderIds });
+      } else {
+        return res.status(200).json({ hasPurchased: false });
+      }
+    } catch (error) {
+      console.error(error);
+      return res.status(500).json({ message: "Internal server error" });
+    }
+  };
+  
   
 
   getWeeklyOrders = async (req, res) => {

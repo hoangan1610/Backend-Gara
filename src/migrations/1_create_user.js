@@ -1,7 +1,4 @@
 'use strict';
-const {
-    Model
-} = require('sequelize');
 module.exports = {
     async up(queryInterface, Sequelize) {
         await queryInterface.createTable('users', {
@@ -32,11 +29,13 @@ module.exports = {
                 type: Sequelize.STRING
             },
             phone: {
-                type: Sequelize.STRING
+                type: Sequelize.STRING,
+                allowNull: false
             },
             gender: {
                 type: Sequelize.STRING
-            }, birth: {
+            },
+            birth: {
                 type: Sequelize.DATE,
                 allowNull: false
             },
@@ -46,6 +45,12 @@ module.exports = {
             },
             image_url: {
                 type: Sequelize.STRING
+            },
+            // Thêm cột loyaltyPoints
+            loyaltyPoints: {
+                type: Sequelize.INTEGER,
+                allowNull: false,
+                defaultValue: 0
             },
             createdAt: {
                 allowNull: false,
@@ -62,4 +67,4 @@ module.exports = {
     async down(queryInterface, Sequelize) {
         await queryInterface.dropTable('users');
     }
-}
+};

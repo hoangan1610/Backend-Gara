@@ -11,6 +11,7 @@ import applyFileRoutes from "./file.route";
 import publicAPIRoute from "./public.route";
 import applyTaskRoute from "./task.route";
 import taskAPIRoute from "./task.route";
+import reviewAPIRoute from "./reviewRoute"; // Import thêm route review
 
 export {
     authAPIRoute,
@@ -25,8 +26,9 @@ export {
     applyFileRoutes,
     publicAPIRoute,
     applyTaskRoute,
-    taskAPIRoute
-}
+    taskAPIRoute,
+    reviewAPIRoute, // Xuất thêm
+};
 
 export const applyAllRoutes = (app) => {
     authAPIRoute(app);
@@ -42,4 +44,5 @@ export const applyAllRoutes = (app) => {
     publicAPIRoute(app);
     applyTaskRoute(app);
     taskAPIRoute(app);
-}
+    reviewAPIRoute(app); // Áp dụng route review
+};

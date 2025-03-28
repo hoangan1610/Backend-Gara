@@ -35,7 +35,7 @@ const startServer = async () => {
       crossOriginResourcePolicy: false,
     }));
 
-    // Đăng ký các route hiện có
+    // Đăng ký các route hiện có (bao gồm cả route review nếu đã tích hợp vào applyAllRoutes)
     applyAllRoutes(app);
 
     // Đăng ký router OTP email
