@@ -493,6 +493,25 @@ export default class OrderController {
     }
   }
 
+  getOrderDetailsByUser = async (req, res) => {
+    try {
+        const user = await this.getUserByToken(req, res);
+        if (!user) return res.status(204).send();
+        const { orderId } = req.params;
+        const order = await new OrderService().getOne({
+            where: { id: orderId, user_id: user.id },
+            include: [{ model: db.order_item, include: [{model: db.product, as: "product",include: [db.product_option]}]}]
+        });
+        if (!order) {
+          return res.status(404).json({ message: "Không tìm thấy đơn hàng" });
+        }      
+        return res.status(200).json(order); 
+    } catch (error) {
+        console.error(error);
+        return res.status(500).json({ message: "Internal server error", error: error.message });
+    }
+  };
+
   createOrder = async (req, res) => {
     const maxRetries = 3;
     for (let attempt = 1; attempt <= maxRetries; attempt++) {

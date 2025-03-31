@@ -10,6 +10,7 @@ const orderRoute = (app) => {
   route.get("/", controller.getAllByUser);
   route.post("/", controller.createOrder);
   route.get("/empty", controller.getEmptyOrder);
+  route.get('/:orderId/items', controller.getOrderDetailsByUser);
   route.get("/:id", controller.getById);
   route.post("/add/:id", controller.addOrderItem);
   route.put("/update/:id", controller.updateOrderItem);
