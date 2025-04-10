@@ -197,6 +197,50 @@ export default class ProductController {
         }
     }
 
+    getSimilarProducts = async (req, res) => {
+        try {
+            const { product_id } = req.body;
+            const limit = Number(req.query.limit) || 10; // Lấy limit từ query params
+    
+            // Lấy thông tin sản phẩm hiện tại
+            const currentProduct = await db.sequelize.query(`
+                SELECT category_id
+                FROM products
+                WHERE id = :product_id
+                LIMIT 1;
+            `, {
+                replacements: { product_id },
+                type: db.Sequelize.QueryTypes.SELECT,
+            });
+    
+            if (!currentProduct || currentProduct.length === 0) {
+                return res.status(404).json({ message: "Không tìm thấy sản phẩm" });
+            }
+    
+            const category_id = currentProduct[0].category_id;
+    
+            // Tìm sản phẩm tương tự theo danh mục (trừ sản phẩm hiện tại)
+            const similarProducts = await db.sequelize.query(`
+                SELECT p.id, p.name, p.price, p.image_url, p.category_id, p.path
+                FROM products p
+                WHERE p.category_id = :category_id AND p.id != :product_id
+                LIMIT :limit;
+            `, {
+                replacements: { category_id, product_id, limit },
+                type: db.Sequelize.QueryTypes.SELECT,
+            });
+    
+            console.log("Sending response:", JSON.stringify(similarProducts, null, 2));
+            return res.status(200).json({
+                message: "Lấy danh sách sản phẩm tương tự thành công",
+                data: similarProducts
+            });
+        } catch (error) {
+            console.error("Error in getSimilarProducts:", error);
+            return res.status(500).json({ message: "Internal Server Error" });
+        }
+    };    
+
     unfollow = async (req, res) => {
         try {
             const { product } = req.body;

@@ -8,8 +8,7 @@ let productRoute = (app) => {
     route.get("/detail/:path", new ProductController().getByPath);
     route.get("/search", new ProductController().search);
     route.get("/best-sellers", new ProductController().getBestSellers);
-
-
+    route.post("/similar", new ProductController().getSimilarProducts);
     return app.use("/api/v1/product", route);
 }
 

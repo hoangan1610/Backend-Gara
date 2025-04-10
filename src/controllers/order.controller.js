@@ -485,13 +485,66 @@ export default class OrderController {
       const user = await this.getUserByToken(req, res);
       if (!user)
         return res.status(204).send();
-      const data = await new OrderService().getAll({ where: { userId: user.id }, include: [{ model: db.order_item, include: [{ model: db.product, include: [db.product_option] }] }] });
+      const data = await new OrderService().getAll({ where: { user_id: user.id }, include: [{ model: db.order_item, include: [{ model: db.product, as: "product", include: [db.product_option] }] }] });
       return res.status(200).json(data);
     } catch (error) {
       console.log(error);
-      return res.status(500).json({ message: "Internal server error" });
+      return res.status(500).json({ message: "Internal server error", error: error.message });
     }
   }
+
+  getOrderDetailsByUser = async (req, res) => {
+    try {
+        const user = await this.getUserByToken(req, res);
+        if (!user) return res.status(204).send();
+        const { orderId } = req.params;
+        const order = await new OrderService().getOne({
+            where: { id: orderId, user_id: user.id },
+            include: [{ model: db.order_item, include: [{model: db.product, as: "product",include: [db.product_option]}]}]
+        });
+        if (!order) {
+          return res.status(404).json({ message: "Không tìm thấy đơn hàng" });
+        }      
+        return res.status(200).json(order); 
+    } catch (error) {
+        console.error(error);
+        return res.status(500).json({ message: "Internal server error", error: error.message });
+    }
+  };
+
+  cancelOrder = async (req, res) => {
+    try {
+      const user = await this.getUserByToken(req, res);
+      if (!user) return res.status(401).json({ message: "Không xác thực được người dùng." });
+  
+      const { orderId } = req.params;
+  
+      const order = await new OrderService().getOne({
+        where: { id: orderId, user_id: user.id }
+      });
+  
+      if (!order) {
+        return res.status(404).json({ message: "Không tìm thấy đơn hàng." });
+      }
+
+      const updatedOrder = await new OrderService().update({
+        id: orderId,
+        status: 'CANCELLED'
+      });
+  
+      return res.status(200).json({
+        message: "Đơn hàng đã được hủy thành công.",
+        order: updatedOrder
+      });
+  
+    } catch (error) {
+      console.error("Lỗi khi hủy đơn hàng:", error);
+      return res.status(500).json({
+        message: "Đã xảy ra lỗi khi hủy đơn hàng.",
+        error: error.message
+      });
+    }
+  };
 
   createOrder = async (req, res) => {
     const maxRetries = 3;
