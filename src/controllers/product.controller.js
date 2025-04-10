@@ -189,6 +189,7 @@ export default class ProductController {
                 user_id: user.id,
                 product_id: product.id
             });
+
             return res.status(200).json({ message: "Followed successfully" });
         } catch (error) {
             console.error(error);

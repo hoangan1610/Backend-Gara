@@ -9,6 +9,7 @@ module.exports = (sequelize, DataTypes) => {
     static associate(models) {
       product_option.belongsTo(models.product, { foreignKey: 'product_id', onDelete: 'CASCADE' });
       product_option.hasMany(models.order_item, { foreignKey: 'product_option_id', onDelete: 'SET NULL'});
+      product_option.hasMany(models.order_item, { foreignKey: 'product_option_id', onDelete: 'SET NULL' });
       product_option.hasMany(models.cart_item, { foreignKey: 'product_option_id', onDelete: 'SET NULL' });
     }
   }

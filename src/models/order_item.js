@@ -9,6 +9,7 @@ module.exports = (sequelize, DataTypes) => {
       order_item.belongsTo(models.order, { foreignKey: 'order_id', onDelete: 'CASCADE' });
       order_item.belongsTo(models.product, { foreignKey: 'product_id', onDelete: 'SET NULL', as: "product" });
       order_item.belongsTo(models.product_option, { foreignKey: 'product_option_id', onDelete: 'SET NULL'});
+      order_item.belongsTo(models.product_option, { foreignKey: 'product_option_id', onDelete: 'SET NULL' });
     }
   }
   order_item.init({

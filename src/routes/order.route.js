@@ -5,6 +5,9 @@ import { OrderController } from "../controllers";
 const route = express.Router();
 
 const orderRoute = (app) => {
+let route = express.Router();
+
+let orderRoute = (app) => {
   const controller = new OrderController();
 
   route.get("/", controller.getAllByUser);
@@ -22,6 +25,7 @@ const orderRoute = (app) => {
   route.get("/has-purchased/:productId", controller.hasPurchasedProduct);
 
   return app.use("/api/v1/order", route);
-};
+  };
+}
 
 export default orderRoute;
