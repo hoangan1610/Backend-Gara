@@ -11,7 +11,7 @@ const orderRoute = (app) => {
   route.post("/", controller.createOrder);
   route.get("/empty", controller.getEmptyOrder);
   route.get('/:orderId/items', controller.getOrderDetailsByUser);
-  route.put('/:orderId/cancel', controller.updateCancelOrder);
+  route.put('/:orderId/cancel', controller.cancelOrder);
   route.get("/:id", controller.getById);
   route.post("/add/:id", controller.addOrderItem);
   route.put("/update/:id", controller.updateOrderItem);

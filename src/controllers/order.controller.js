@@ -502,7 +502,6 @@ export default class OrderController {
             where: { id: orderId, user_id: user.id },
             include: [{ model: db.order_item, include: [{model: db.product, as: "product",include: [db.product_option]}]}]
         });
-        console.log(order)
         if (!order) {
           return res.status(404).json({ message: "Không tìm thấy đơn hàng" });
         }      
@@ -513,33 +512,37 @@ export default class OrderController {
     }
   };
 
-  // Hủy trong vòng 30 phút
-  updateCancelOrder = async (req, res) => {
+  cancelOrder = async (req, res) => {
     try {
-      const order = await this.getOrderDetailsByUser(req, res); // Đảm bảo nhận lại dữ liệu từ getOrderDetailsByUser
-      if (!order) return res.status(404).json({ message: "Không tìm thấy đơn hàng" });
+      const user = await this.getUserByToken(req, res);
+      if (!user) return res.status(401).json({ message: "Không xác thực được người dùng." });
   
-      const currentTime = new Date();
-      const orderTime = new Date(order.created_at);
-      const timeDifferenceInMinutes = (currentTime - orderTime) / 60000;
-      if (timeDifferenceInMinutes > 30) {
-        return res.status(400).json({ message: "Không thể hủy đơn hàng sau 30 phút" });
-      }
-      const updatedOrder = await db.Order.update(
-        { status: 'CANCELLED' },  // Trường cần cập nhật
-        { where: { id: order.id } }  // Điều kiện cập nhật
-      );
-      if (updatedOrder[0] === 0) {
-        return res.status(400).json({ message: "Cập nhật đơn hàng không thành công" });
-      }
-      const orderAfterUpdate = await db.Order.findOne({
-        where: { id: order.id },
-        include: [{ model: db.order_item, include: [{ model: db.product, as: "product", include: [db.product_option] }] }]
+      const { orderId } = req.params;
+  
+      const order = await new OrderService().getOne({
+        where: { id: orderId, user_id: user.id }
       });
-      return res.status(200).json({ message: "Đơn hàng đã được hủy thành công", order: orderAfterUpdate });
+  
+      if (!order) {
+        return res.status(404).json({ message: "Không tìm thấy đơn hàng." });
+      }
+
+      const updatedOrder = await new OrderService().update({
+        id: orderId,
+        status: 'CANCELLED'
+      });
+  
+      return res.status(200).json({
+        message: "Đơn hàng đã được hủy thành công.",
+        order: updatedOrder
+      });
+  
     } catch (error) {
-      console.error(error);
-      return res.status(500).json({ message: "Internal server error", error: error.message });
+      console.error("Lỗi khi hủy đơn hàng:", error);
+      return res.status(500).json({
+        message: "Đã xảy ra lỗi khi hủy đơn hàng.",
+        error: error.message
+      });
     }
   };
 

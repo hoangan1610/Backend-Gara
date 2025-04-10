@@ -198,7 +198,6 @@ export default class ProductController {
 
     getSimilarProducts = async (req, res) => {
         try {
-            console.log("Fetching similar products...");
             const { product_id } = req.body;
             const limit = Number(req.query.limit) || 10; // Lấy limit từ query params
     
