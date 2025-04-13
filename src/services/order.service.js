@@ -110,5 +110,35 @@ export default class OrderService {
       throw error;
     }
   }
+
+  async getMonthlyCashflowStatsByUser(userId, year) {
+    try {
+      const startDate = new Date(`${year}-01-01T00:00:00.000Z`);
+      const endDate = new Date(`${year + 1}-01-01T00:00:00.000Z`);
+  
+      const result = await this.model.findAll({
+        attributes: [
+          [db.sequelize.fn('MONTH', db.sequelize.col('createdAt')), 'month'],
+          'status',
+          [db.sequelize.fn('SUM', db.sequelize.col('total_amount')), 'total']
+        ],
+        where: {
+          user_id: userId,
+          createdAt: {
+            [db.Sequelize.Op.gte]: startDate,
+            [db.Sequelize.Op.lt]: endDate
+          }
+        },
+        group: ['month', 'status'],
+        order: [[db.sequelize.fn('MONTH', db.sequelize.col('createdAt')), 'ASC']],
+        raw: true
+      });
+  
+      return result;
+    } catch (error) {
+      console.error('Lỗi khi thống kê dòng tiền trong service:', error);
+      return null;
+    }
+  }  
   
 }

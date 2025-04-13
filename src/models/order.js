@@ -44,6 +44,14 @@ module.exports = (sequelize, DataTypes) => {
       type: DataTypes.STRING,
       allowNull: true
     },
+    cancel_reason: {
+      type: DataTypes.STRING,
+      allowNull: true
+    },
+    cancel_request_status: {
+      type: DataTypes.STRING,
+      allowNull: true 
+    }
   }, {
     sequelize,
     modelName: 'order',
