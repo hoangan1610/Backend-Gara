@@ -526,7 +526,11 @@ export default class OrderController {
       if (!order) {
         return res.status(404).json({ message: "Không tìm thấy đơn hàng." });
       }
-
+  
+      if (order.status === 'CANCELLED') {
+        return res.status(400).json({ message: "Đơn hàng đã được hủy trước đó." });
+      }
+  
       const updatedOrder = await new OrderService().update({
         id: orderId,
         status: 'CANCELLED'
@@ -544,8 +548,117 @@ export default class OrderController {
         error: error.message
       });
     }
-  };
+  };  
 
+  requestCancelOrder = async (req, res) => {
+    try {
+      const user = await this.getUserByToken(req, res);
+      if (!user) {
+        return res.status(401).json({ message: "Không xác thực được người dùng." });
+      }
+  
+      const { orderId, reason } = req.body;
+  
+      const cancelReasons = [
+        "Không nhận được kiện hàng",
+        "Không còn nhu cầu",
+        "Sản phẩm không khớp với mô tả",
+        "Kiện hàng hoặc sản phẩm bị hư hỏng",
+        "Sản phẩm bị lỗi hoặc không hoạt động",
+        "Gửi sai sản phẩm"
+      ];
+  
+      if (!cancelReasons.includes(reason)) {
+        return res.status(400).json({ message: "Lý do hủy đơn hàng không hợp lệ." });
+      }
+  
+      const order = await new OrderService().getOne({
+        where: { id: orderId, user_id: user.id }
+      });
+  
+      if (!order) {
+        return res.status(404).json({ message: "Không tìm thấy đơn hàng." });
+      }
+  
+      if (order.status === 'CANCELLED') {
+        return res.status(400).json({ message: "Đơn hàng đã được hủy trước đó." });
+      }
+  
+      // Kiểm tra thời gian tạo đơn hàng và trạng thái đơn hàng
+      const createdAt = new Date(order.createdAt);
+      const now = new Date();
+      const timeDifference = (now - createdAt) / (1000 * 60); // Thời gian chênh lệch tính bằng phút
+
+      // Kiểm tra nếu đơn hàng không phải 'PREPARING' và cũng chưa quá 30 phút
+      if (order.status !== 'PREPARING' && timeDifference <= 30) {
+        return res.status(400).json({
+          message: "Chỉ có thể gửi yêu cầu hủy khi đơn hàng đang được chuẩn bị hoặc đã quá 30 phút kể từ khi tạo đơn hàng."
+        });
+      }
+
+      if (order.cancel_request_status === 'PENDING') {
+        return res.status(400).json({ message: "Bạn đã gửi yêu cầu hủy đơn này trước đó." });
+      }
+
+      const updatedOrder = await new OrderService().update({
+        id: orderId,
+        cancel_reason: reason,
+        cancel_request_status: 'PENDING'
+      });
+  
+      return res.status(200).json({
+        message: "Yêu cầu hủy đơn hàng đã được gửi thành công.",
+        order: updatedOrder
+      });
+  
+    } catch (error) {
+      console.error("Lỗi khi gửi yêu cầu hủy đơn hàng:", error);
+      return res.status(500).json({
+        message: "Đã xảy ra lỗi khi gửi yêu cầu hủy đơn hàng.",
+        error: error.message
+      });
+    }
+  };
+    
+
+  getMonthlyCashflowStatsByUser = async (req, res) => {
+    try {
+      const user = await this.getUserByToken(req, res);
+      if (!user) return res.status(204).send();
+  
+      const year = parseInt(req.query.year) || new Date().getFullYear();
+  
+      const results = await this.orderService.getMonthlyCashflowStatsByUser(user.id, year);
+      if (!results) return res.status(500).json({ message: "Lỗi khi lấy dữ liệu thống kê" });
+
+      // Khởi tạo mảng dữ liệu 12 tháng với 3 trạng thái mặc định
+      const data = Array.from({ length: 12 }, (_, i) => ({
+        month: i + 1,
+        PENDING: 0,
+        DELIVERING: 0,
+        FINISHED: 0
+      }));
+  
+      // Gán kết quả vào mảng data
+      results.forEach(item => {
+        const monthIndex = parseInt(item.month) - 1;
+        const status = item.status;
+        data[monthIndex][status] = parseFloat(item.total);
+      });
+  
+      return res.status(200).json({
+        message: `Thống kê dòng tiền năm ${year}`,
+        data
+      });
+    } catch (error) {
+      console.error('Lỗi khi thống kê dòng tiền:', error);
+      return res.status(500).json({
+        message: "Lỗi server khi thống kê dòng tiền",
+        error: error.message
+      });
+    }
+  };
+  
   createOrder = async (req, res) => {
     const maxRetries = 3;
     for (let attempt = 1; attempt <= maxRetries; attempt++) {

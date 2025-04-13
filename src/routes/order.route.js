@@ -2,9 +2,6 @@
 import express from "express";
 import { OrderController } from "../controllers";
 
-const route = express.Router();
-
-const orderRoute = (app) => {
 let route = express.Router();
 
 let orderRoute = (app) => {
@@ -15,6 +12,8 @@ let orderRoute = (app) => {
   route.get("/empty", controller.getEmptyOrder);
   route.get('/:orderId/items', controller.getOrderDetailsByUser);
   route.put('/:orderId/cancel', controller.cancelOrder);
+  route.post('/:orderId/request-cancel', controller.requestCancelOrder);
+  route.get('/cashflow', controller.getMonthlyCashflowStatsByUser);
   route.get("/:id", controller.getById);
   route.post("/add/:id", controller.addOrderItem);
   route.put("/update/:id", controller.updateOrderItem);
@@ -25,7 +24,6 @@ let orderRoute = (app) => {
   route.get("/has-purchased/:productId", controller.hasPurchasedProduct);
 
   return app.use("/api/v1/order", route);
-  };
-}
+};
 
 export default orderRoute;
