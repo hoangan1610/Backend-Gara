@@ -1,23 +1,26 @@
-import AuthController from "./auth.controller";
-import UserController from "./user.controller";
-import CartController from "./cart.controller";
-import ProductController from "./product.controller";
-import OrderController from "./order.controller";
-import CategoryController from "./category.controller";
-import CostController from "./cost.controller";
-import PublicController from "./public.controller";
-import TaskController from "./TaskController";
-import ReviewController from "./ReviewController"; // Import thêm ReviewController
+// src/controllers/index.js
+import AuthController from './auth.controller.js';
+import UserController from './user.controller.js';
+import CartController from './cart.controller.js';
+import ProductController from './product.controller.js';
+import OrderController from './order.controller.js';
+import CategoryController from './category.controller.js';
+import CostController from './cost.controller.js';
+import PublicController from './public.controller.js';
+import TaskController from './TaskController.js';
+import ReviewController from './ReviewController.js';
+import NotificationController from './NotificationController.js'; // Thêm NotificationController
 
 export {
-    AuthController,
-    UserController,
-    CartController,
-    ProductController,
-    OrderController,
-    CategoryController,
-    CostController,
-    PublicController,
-    TaskController,
-    ReviewController, // Xuất thêm
+  AuthController,
+  UserController,
+  CartController,
+  ProductController,
+  OrderController,
+  CategoryController,
+  CostController,
+  PublicController,
+  TaskController,
+  ReviewController,
+  NotificationController, // Xuất thêm
 };

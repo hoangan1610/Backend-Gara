@@ -62,8 +62,19 @@ class UserService {
         try {
           const user = await this.model.findOne({
             where: { id: user_id },
-            // Cập nhật attributes để lấy thêm email, birth, gender, image_url
-            attributes: ['id', 'email', 'first_name', 'last_name', 'address', 'phone', 'gender', 'birth', 'image_url'],
+            // Updated attributes list to include loyaltyPoints along with other fields.
+            attributes: [
+              'id', 
+              'email', 
+              'first_name', 
+              'last_name', 
+              'address', 
+              'phone', 
+              'gender', 
+              'birth', 
+              'image_url',
+              'loyaltyPoints'
+            ],
             include: [
               {
                 model: db.cart,
@@ -140,6 +151,7 @@ class UserService {
           return null;
         }
       }
+      
       
       
       

@@ -6,6 +6,9 @@ import moment from "moment";
 import { account_roles, order_status, payment_method_codes } from "../constants/constants";
 import EmailService from "../services/email.service";
 import order_queue from "./queues/order_queue";
+// order.controller.js
+import { sendNotificationToUser } from "../server";// Đường dẫn tùy thuộc vào cấu trúc dự án của bạn
+
 const { Op } = require('sequelize');
 
 require("dotenv").config();
@@ -38,14 +41,16 @@ export default class OrderController {
       if (!user) return res.status(401).json({ message: "Unauthorized" });
       
       const { productId } = req.params;
-      // Lấy tất cả các đơn hàng của user
+      // Lấy tất cả các đơn hàng của user, bao gồm cả các order_item
       const orders = await db.order.findAll({
         where: { user_id: user.id },
         include: [{ model: db.order_item }]
       });
       
-      // Lọc ra các đơn hàng có chứa sản phẩm với productId
+      // Lọc ra các đơn hàng có chứa sản phẩm với productId 
+      // và đơn hàng đã về trạng thái "finished"
       const matchingOrders = orders.filter(order => 
+        order.status === "FINISHED" &&
         order.order_items.some(item => item.product_id == productId)
       );
       
@@ -60,6 +65,7 @@ export default class OrderController {
       return res.status(500).json({ message: "Internal server error" });
     }
   };
+  
   
   
 
@@ -659,148 +665,180 @@ export default class OrderController {
     }
   };
   
+  async getUserByToken(req, res) {
+    // ... hiện tại bạn có thể dùng req.user nếu middleware authenticateToken đã gắn
+    return req.user;
+  }
+
   createOrder = async (req, res) => {
     const maxRetries = 3;
+
     for (let attempt = 1; attempt <= maxRetries; attempt++) {
       const transaction = await db.sequelize.transaction({
-        isolationLevel: db.Sequelize.Transaction.ISOLATION_LEVELS.READ_COMMITTED
+        isolationLevel: db.Sequelize.Transaction.ISOLATION_LEVELS.READ_COMMITTED,
       });
+
       try {
-        // Thiết lập thời gian chờ lock cao hơn (ví dụ 50 giây)
-        await db.sequelize.query("SET innodb_lock_wait_timeout = 50", { transaction });
-  
-        // Lấy dữ liệu từ payload, bao gồm shipping_address
-        const { items: order_items, info, bank_code, payment_method, shipping_address } = req.body;
-        if (!order_items || !Array.isArray(order_items) || order_items.length === 0) {
+        // 1) Tăng timeout lock để tránh deadlock
+        await db.sequelize.query(
+          "SET innodb_lock_wait_timeout = 50",
+          { transaction }
+        );
+
+        // 2) Destructure payload
+        const {
+          items: order_items,
+          info,
+          bank_code,
+          payment_method,
+          shipping_address
+        } = req.body;
+
+        if (!Array.isArray(order_items) || order_items.length === 0) {
           await transaction.rollback();
           return res.status(400).json({ message: "No items provided" });
         }
-  
-        // Lấy danh sách id sản phẩm và product option từ order_items
-        const productIds = order_items
-          .map(item => item.product?.id)
-          .filter(id => id != null);
-        const productOptionIds = order_items
-          .map(item => item.product_option?.id)
-          .filter(id => id != null);
-        if (productIds.length === 0 || productOptionIds.length === 0) {
-          await transaction.rollback();
-          return res.status(400).json({ message: "Invalid product data" });
-        }
-  
-        // Lấy thông tin người dùng từ token
+
+        // 3) Lấy user từ token (authenticateToken phải đặt trước route này)
         const user = await this.getUserByToken(req, res);
-  
-        // Lấy thông tin sản phẩm và product option từ DB
-        const products = await this.productService.getAll({ where: { id: productIds }, transaction });
-        const productOptions = await this.productOptionService.getAll({ where: { id: productOptionIds }, transaction });
-        const productMap = new Map(products.map(product => [product.id, product]));
-        const productOptionMap = new Map(productOptions.map(option => [option.id, option]));
-  
-        // Kiểm tra tồn kho cho từng sản phẩm
-        const outOfStockItems = [];
+        if (!user) {
+          await transaction.rollback();
+          return res.status(401).json({ message: "Unauthorized" });
+        }
+
+        // 4) Chuẩn bị danh sách IDs để query stock
+        const productIds       = order_items.map(i => i.product.id).filter(Boolean);
+        const productOptionIds = order_items.map(i => i.product_option?.id).filter(Boolean);
+
+        // 5) Fetch các bản ghi Product & ProductOption trong transaction
+        const Product       = db.product;         // sửa theo đúng key trong models/index.js
+        const ProductOption = db.product_option;  // sửa theo đúng key trong models/index.js
+        const products       = await Product.findAll({ where: { id: productIds }, transaction });
+        const productOptions = await ProductOption.findAll({ where: { id: productOptionIds }, transaction });
+
+        const productMap = new Map(products.map(p => [p.id, p]));
+        const optionMap  = new Map(productOptions.map(o => [o.id, o]));
+
+        // 6) Kiểm tra tồn kho
+        const outOfStock = [];
         for (let item of order_items) {
-          const product = productMap.get(item.product?.id);
-          const productOption = productOptionMap.get(item.product_option?.id);
-          if (!product || !productOption || product.stock < item.quantity || productOption.stock < item.quantity) {
-            outOfStockItems.push({
-              product_name: item.product?.name || "Unknown product",
-              product_option_name: item.product_option?.name || "Unknown option",
-              requestedQuantity: item.quantity,
-              availableStock: {
-                product: product ? product.stock : 0,
-                productOption: productOption ? productOption.stock : 0,
-              },
+          const prod = productMap.get(item.product.id);
+          const opt  = optionMap.get(item.product_option?.id);
+          if (!prod || !opt || prod.stock < item.quantity || opt.stock < item.quantity) {
+            outOfStock.push({
+              product:   prod?.name   || 'Unknown',
+              option:    opt?.name    || 'Unknown',
+              requested: item.quantity,
+              available: {
+                product: prod?.stock ?? 0,
+                option:  opt?.stock  ?? 0
+              }
             });
           }
         }
-        if (outOfStockItems.length > 0) {
+        if (outOfStock.length) {
           await transaction.rollback();
           return res.status(400).json({
-            message: 'Some products are out of stock',
+            message: "Some items are out of stock",
             code: 404,
-            outOfStockItems,
+            outOfStockItems: outOfStock
           });
         }
-  
-        // Tìm hoặc tạo đơn hàng với trạng thái EMPTY
-        let [order, created] = await this.orderService.findOrCreate({
-          where: { user_id: user?.id || null, status: order_status.EMPTY },
+
+        // 7) Tạo hoặc tìm Order với trạng thái EMPTY
+        const Order = db.order; // sửa theo đúng key trong models/index.js
+        let [order] = await Order.findOrCreate({
+          where: { user_id: user.id, status: order_status.EMPTY },
           defaults: {
-            user_id: user?.id || null,
-            status: order_status.EMPTY,
-            currency: 'VND',
+            user_id:  user.id,
+            status:   order_status.EMPTY,
+            currency: 'VND'
           },
           transaction
         });
-  
-        // Chuẩn bị dữ liệu cho bulkCreate order_items
-        const orderItemData = order_items.map(item => {
-          const price = item.product_option && item.product_option.price
-            ? item.product_option.price
-            : item.product.price;
-          return {
-            order_id: order.id,
-            product_id: item.product.id,
-            product_option_id: item.product_option?.id || null,
-            quantity: item.quantity,
-            price: price,
-            currency: "VND",
-            createdAt: new Date(),
-            updatedAt: new Date()
-          };
-        });
-        // Bulk insert order_items
-        await db.order_item.bulkCreate(orderItemData, { transaction });
-  
-        // Cập nhật tồn kho cho từng sản phẩm (tuần tự)
-        for (const item of order_items) {
-          const product = productMap.get(item.product.id);
-          const productOption = productOptionMap.get(item.product_option?.id);
-          if (product && productOption) {
-            product.stock -= item.quantity;
-            productOption.stock -= item.quantity;
-            await product.save({ transaction });
-            await productOption.save({ transaction });
-          }
+
+        // 8) Tạo order_items với bulkCreate
+        const OrderItem = db.order_item; // sửa theo đúng key
+        const bulkData = order_items.map(item => ({
+          order_id:          order.id,
+          product_id:        item.product.id,
+          product_option_id: item.product_option?.id || null,
+          quantity:          item.quantity,
+          price:             item.product_option?.price ?? item.product.price,
+          currency:          'VND',
+          createdAt:         new Date(),
+          updatedAt:         new Date()
+        }));
+        await OrderItem.bulkCreate(bulkData, { transaction });
+
+        // 9) Cập nhật stock tuần tự
+        for (let item of order_items) {
+          const prod = productMap.get(item.product.id);
+          const opt  = optionMap.get(item.product_option?.id);
+          prod.stock -= item.quantity;
+          opt.stock  -= item.quantity;
+          await prod.save({ transaction });
+          await opt.save({ transaction });
         }
-  
-        // Tính tổng tiền đơn hàng
+
+        // 10) Tính tổng tiền và cập nhật order
         const totalAmount = order_items.reduce((sum, item) => {
-          const price = item.product_option && item.product_option.price
-            ? item.product_option.price
-            : item.product.price;
+          const price = item.product_option?.price ?? item.product.price;
           return sum + price * item.quantity;
         }, 0);
-  
-        // Cập nhật thông tin đơn hàng, bao gồm shipping_address trong order.info
-        order.info = { ...order.info, ...info, shipping_address: shipping_address };
+
+        order.info           = { ...order.info, ...info, shipping_address };
         order.payment_method = payment_method;
-        order.total_amount = totalAmount;
+        order.total_amount   = totalAmount;
         if (payment_method === "COD") {
           order.status = order_status.PENDING;
         } else {
-          order.status = order_status.PROCESSING;
+          order.status            = order_status.PROCESSING;
           order.payment_bank_code = bank_code;
         }
         await order.save({ transaction });
-  
+
+        // 11) Commit transaction
         await transaction.commit();
-        return res.status(201).json({ message: "Order created successfully", order });
-      } catch (error) {
-        await transaction.rollback();
-        if (error.parent && error.parent.errno === 1205) {
-          console.error(`Lock wait timeout, attempt ${attempt} of ${maxRetries}`);
-          if (attempt === maxRetries) {
-            return res.status(500).json({ message: "Internal Server Error - Please try again later" });
+
+        // 12) Tạo bản ghi Notification trong DB
+        const Notification = db.Notification;  // đúng key trong models/index.js
+        const notif = await Notification.create({
+          userId:  user.id,
+          message: "Đơn hàng của bạn đã được tạo thành công",
+          orderId: order.id.toString()
+        });
+
+        // 13) Gửi realtime tới client qua Socket.IO
+        sendNotificationToUser(
+          String(user.id),
+          {
+            id:        notif.id,
+            message:   notif.message,
+            orderId:   notif.orderId,
+            timestamp: notif.timestamp
           }
-        } else {
-          console.error("Error in createOrder:", error);
-          return res.status(500).json({ message: "Internal Server Error" });
+        );
+
+        // 14) Trả về client
+        return res.status(201).json({
+          success: true,
+          message: "Order created successfully",
+          order
+        });
+
+      } catch (error) {
+        // Rollback và retry nếu deadlock
+        await transaction.rollback();
+        if (error.parent?.errno === 1205 && attempt < maxRetries) {
+          console.warn(`Lock wait timeout, retry ${attempt}/${maxRetries}`);
+          continue;
         }
+        console.error("Error in createOrder:", error);
+        return res.status(500).json({ message: "Internal Server Error" });
       }
     }
-  };
+  }
   
   
   getEmptyOrder = async (req, res) => {
