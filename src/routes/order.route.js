@@ -23,6 +23,10 @@ let orderRoute = (app) => {
   // Endpoint kiểm tra mua sản phẩm
   route.get("/has-purchased/:productId", controller.hasPurchasedProduct);
 
+  // Endpoint đánh giá sản phẩm
+  route.get("/:orderId/item/:orderItemId/rating", controller.getRatingStatus);
+  route.post("/:orderId/item/:orderItemId/rating", controller.submitRating);
+
   return app.use("/api/v1/order", route);
 };
 

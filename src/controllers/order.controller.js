@@ -625,7 +625,6 @@ export default class OrderController {
       });
     }
   };
-    
 
   getMonthlyCashflowStatsByUser = async (req, res) => {
     try {
