@@ -43,6 +43,16 @@ export class ReviewService {
       newLoyaltyPoints: foundUser.loyaltyPoints,
     };
   }
+
+  async getOne(options = {}) {
+    try {
+      const result = await Review.findOne(options);
+      return result;
+    } catch (error) {
+      console.error(error);
+      return null;
+    }
+  }
 }
 
 export default new ReviewService();
