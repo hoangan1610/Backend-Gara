@@ -10,6 +10,7 @@ const authAPIRoute = (app) => {
   authAPI.get("/verify-email/:token", new AuthController().verifyEmail);
   authAPI.post("/request-reset-password", new AuthController().requestPasswordReset);
   authAPI.post("/reset-password", new AuthController().resetPassword2);
+  authAPI.post("/reset-password", new AuthController().resetPassword);
   authAPI.post("/verify-reset-otp", new AuthController().verifyResetOTP);
 
   authAPI.post("/refresh-token", new AuthController().refreshAccessToken);

@@ -54,6 +54,7 @@ module.exports = {
             updatedAt: createdAt,
           };
         });
+      users = users.sort((a, b) => a.createdAt - b.createdAt);
       console.log("Inserting users..., length: ", users.length);
       await queryInterface.sequelize.query('SET FOREIGN_KEY_CHECKS = 0;');
       const batchSize = 1000; // Tăng kích thước batch

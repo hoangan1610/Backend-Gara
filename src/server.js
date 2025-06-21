@@ -64,6 +64,7 @@ reviewAPIRoute(app);
 
 // === BẢO VỆ ĐƯỜNG DẪN SAU ĐÂY BẰNG JWT ===
 
+app.use(authenticateToken);
 
 productRoute(app);    // /api/v1/products/*
 cartAPIRoute(app);    // /api/v1/cart/*
