@@ -229,8 +229,12 @@ export default class AuthController {
   
       // Gửi OTP về email người dùng
       await new EmailService().sendRegisterEmailOtp({ email, otp });
+
+      const payload = { email };
+      const token = jwt.sign(payload, process.env.RESET_PASSWORD_SECRET_KEY, { expiresIn: '15m' });
   
-      return res.status(200).json({ message: "Mã OTP xác thực đã được gửi đến email của bạn" });
+      return res.status(200).json({ message: "Mã OTP xác thực đã được gửi đến email của bạn", token });
+
     } catch (error) {
       console.error("Error in registerUser:", error);
       return res.status(500).json({ message: "Lỗi máy chủ", error });
@@ -264,8 +268,13 @@ export default class AuthController {
   
       // Xóa OTP sau khi xác thực thành công
       delete global.registerOtpStore[email];
+      const access_token = jwt.sign(
+                { email: createdUser.email, id: createdUser.id, role: createdUser.role },
+                process.env.ACCESS_TOKEN_SECRET_KEY,
+                { expiresIn: '1h' }
+            );
   
-      return res.status(200).json({ message: "Đăng ký thành công", user: createdUser });
+      return res.status(200).json({ message: "Đăng ký thành công", user: createdUser, token: access_token });
     };
 
 
@@ -400,16 +409,19 @@ export default class AuthController {
     
         // Nếu OTP hợp lệ, xóa OTP khỏi store (để không lặp lại)
         delete global.forgotPasswordOtpStore[email];
-    
+            // Tạo token để gửi về FE cho bước reset password
+        const payload = {
+          email
+        };
+        const resetToken = jwt.sign(payload, process.env.RESET_PASSWORD_SECRET_KEY, { expiresIn: '15m' });
+        return res.status(200).json({ message: "OTP xác thực thành công", token: resetToken });
         // Ở đây bạn có thể chuyển hướng FE sang màn hình đặt lại mật khẩu
         // Hoặc trả về một mã thông báo để cho phép FE gọi endpoint resetPassword
-        return res.status(200).json({ message: "OTP xác thực thành công" });
       } catch (error) {
         console.error("Error in verifyResetOTP:", error);
         return res.status(500).json({ message: "Lỗi máy chủ" });
       }
     }
-    
     
     async resetPassword(req, res) {
       try {
@@ -433,7 +445,9 @@ export default class AuthController {
       }
     }
     
-    
+    resetPassword2 = async (req, res) => {
+        const { token, password } = req.body;
+        console.log("Reset password request received:", { token, password });
 
     resetPassword2 = async (req, res) => {
         const { token, password } = req.body;
@@ -443,7 +457,9 @@ export default class AuthController {
 
         try {
             const decoded = jwt.verify(token, process.env.RESET_PASSWORD_SECRET_KEY);
+            console.log("Decoded token:", decoded);
             if (!decoded.email) {
+              console.log("Token không hợp lệ: Không có email trong token");
                 return res.status(400).json({ message: "Token không hợp lệ" });
             }
 
@@ -456,7 +472,6 @@ export default class AuthController {
             if (decoded.old_password !== user.hashed_password) {
                 return res.status(400).json({ message: "Token không hợp lệ" });
             }
-
             const updatedUser = await new UserService().updateUserPassword({ email: decoded.email, password });
             return res.status(200).json({ message: "Mật khẩu đã được thay đổi thành công", user: updatedUser });
         } catch (error) {
@@ -527,4 +542,5 @@ export default class AuthController {
             console.log(error);
             return res.status(400).json({ message: "Token không hợp lệ" });
         }
-    }}
+    }
+  }}

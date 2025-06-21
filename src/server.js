@@ -51,6 +51,7 @@ app.use(bodyParser.json());
 app.use(bodyParser.urlencoded({ extended: true }));
 app.use(cookieParser());
 app.use(express.static('public'));
+app.use(authenticateToken);
 
 // === PUBLIC ROUTES (không cần token) ===
 authAPIRoute(app);               // /api/v1/auth/*
@@ -62,6 +63,7 @@ taskAPIRoute(app);
 reviewAPIRoute(app);
 
 // === BẢO VỆ ĐƯỜNG DẪN SAU ĐÂY BẰNG JWT ===
+
 app.use(authenticateToken);
 
 productRoute(app);    // /api/v1/products/*
