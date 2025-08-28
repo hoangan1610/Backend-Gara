@@ -478,7 +478,7 @@ export default class AuthController {
             console.log(error);
             return res.status(400).json({ message: "Token không hợp lệ hoặc đã hết hạn" });
         }
-    }
+    }}
 
     refreshAccessToken = async (req, res) => {
         let { refresh_token } = req.body;
@@ -543,4 +543,4 @@ export default class AuthController {
             return res.status(400).json({ message: "Token không hợp lệ" });
         }
     }
-  }}
+  }

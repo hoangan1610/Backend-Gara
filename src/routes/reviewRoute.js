@@ -8,6 +8,7 @@ const reviewRouter = express.Router();
 reviewRouter.post("/", authenticateToken, new ReviewController().createReview);
 
 // GET /api/v1/review?productId=... -> Lấy danh sách review cho sản phẩm
+// Fixed: Changed from static method getComments to getReviews
 reviewRouter.get("/", authenticateToken, ReviewController.getReviews);
 
 const reviewAPIRoute = (app) => {
