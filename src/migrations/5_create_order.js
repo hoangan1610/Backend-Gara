@@ -47,6 +47,14 @@ module.exports = {
         type: Sequelize.STRING,
         allowNull: true
       },
+      cancel_reason: {
+        type: Sequelize.STRING,
+        allowNull: true
+      },
+      cancel_request_status: {
+        type: Sequelize.STRING,
+        allowNull: true
+      },
       createdAt: {
         allowNull: false,
         type: Sequelize.DATE,
